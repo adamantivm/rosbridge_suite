@@ -137,7 +137,7 @@ class WebsocketClientTornado():
             except Exception as e:
                 rospy.logerr("Could not connect to WebCam")
                 rospy.logerr(e)
-                self.write_message(json.dumps({"op": "endVideo",
+                self.conn.write_message(json.dumps({"op": "endVideo",
                                               "session_id": session_id}))
         elif msg['op'] == "endVideo":
             self.transfers[session_id].end_video()
@@ -196,18 +196,20 @@ class VideoTransfer():
         self.http_client = tornado.httpclient.AsyncHTTPClient()
         self.http_client.fetch(req, self.async_callback)
         self.chunk = 0
+        self.closed = False
 
     def streaming_callback(self, data):
         "Sends video in chunks"
-        try:
-            self.chunk += 1
-            encoded = base64.b64encode(data)   # Encode in Base64 & make json
-            chunk = json.dumps({"op": "videoData",
-                               "data": encoded,
-                                "session_id": self.session_id})
-            self.conn.conn.write_message(chunk)
-        except Exception as e:
-            rospy.logerr(e)
+        if not self.closed:
+            try:
+                self.chunk += 1
+                encoded = base64.b64encode(data)   # Encode in Base64 & make json
+                chunk = json.dumps({"op": "videoData",
+                                   "data": encoded,
+                                    "session_id": self.session_id})
+                self.conn.conn.write_message(chunk)
+            except Exception as e:
+                rospy.logerr(e)
 
     def async_callback(self, response):
         rospy.loginfo("Finished connection")
@@ -215,6 +217,7 @@ class VideoTransfer():
     def end_video(self):
         rospy.loginfo("Finished Video")
         self.http_client.close()
+        self.closed = True
 
 if __name__ == "__main__":
     try:
